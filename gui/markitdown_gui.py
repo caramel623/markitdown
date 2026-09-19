@@ -46,11 +46,13 @@ except Exception as exc:  # pragma: no cover - import guard
     raise
 
 # Extensions markitdown can meaningfully convert. Used for folder scanning
-# and the file dialog filter.
+# and the file dialog filter. (Legacy .doc / .ppt / .xlsb are not natively
+# supported by the bundled converters, so they are intentionally omitted.)
 SUPPORTED_EXTENSIONS: Set[str] = {
-    ".pdf", ".docx", ".doc", ".docm",
-    ".xlsx", ".xlsm", ".xls", ".xlsb",
-    ".pptx", ".ppt", ".pptm",
+    ".pdf",
+    ".docx",
+    ".xlsx", ".xls",
+    ".pptx",
     ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".webp", ".svg",
     ".csv", ".tsv", ".txt", ".md", ".rst",
     ".html", ".htm", ".xml", ".json", ".ipynb",

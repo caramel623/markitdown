@@ -184,11 +184,18 @@ def _selftest_apply() -> int:
     from PyQt6.QtWidgets import QApplication
     from PyQt6.QtCore import QEventLoop, QTimer
 
-    from updater import UpdateWorker, DownloadWorker, verify_update, apply_update
+    from updater import (
+        UpdateWorker,
+        DownloadWorker,
+        verify_update,
+        apply_update,
+        _schedule_quit,
+    )
 
     report: list[str] = []
     app = QApplication([])
     out_path = Path(os.environ.get("MKG_SELFTEST_OUT", "C:\\temp\\mkg_apply.txt"))
+    relaunch = os.environ.get("MKG_APPLY_RELAUNCH", "0") == "1"
 
     loop = QEventLoop()
     holder: list = []
@@ -201,8 +208,14 @@ def _selftest_apply() -> int:
     loop.exec()
     res = holder[0] if holder else None
     if not res or not res.can_auto:
-        _write(out_path, ["no downloadable update", "SELFTEST_APPLY_FAIL"])
-        return 1
+        notes = []
+        if res:
+            notes.append(
+                f"current={res.current_sha[:7]} latest={(res.latest_sha or '')[:7]} "
+                f"has_update={res.has_update}"
+            )
+        _write(out_path, notes + ["no downloadable update", "SELFTEST_APPLY_ALREADY_UP_TO_DATE"])
+        return 0
 
     import tempfile
 
@@ -219,16 +232,60 @@ def _selftest_apply() -> int:
     ok, msg, sha = verify_update(res.extract_dir, res.latest_sha)
     report.append(f"verify ok={ok} msg={msg} sha={(sha or '')[:7]} latest={res.latest_sha[:7]}")
     if res.update_ready and ok:
-        m = apply_update(res, relaunch=False)
+        m = apply_update(res, relaunch=relaunch)
         report.append(f"apply_update -> {m}")
         report.append("SELFTEST_APPLY_SCHEDULED")
+        # Mirror the dialog path: schedule a shutdown so the folder swap
+        # can proceed (only meaningful when relaunch=True).
+        if relaunch:
+            _schedule_quit(500)
     else:
         report.append("SELFTEST_APPLY_FAIL")
     _write(out_path, report)
     return 0
 
 
+def _selftest_relaunch() -> int:
+    """Called on the relaunched process after an in-place update. Records the
+    (new) build SHA, disables any auto re-check, and exits quietly."""
+    from pathlib import Path
+
+    report: list[str] = []
+    rel_out = Path(os.environ.get("MKG_SELFTEST_REL_OUT", "C:\\temp\\mkg_relaunch.txt"))
+    try:
+        from buildinfo import BUILD_SHA as CURRENT_SHA
+    except Exception:
+        CURRENT_SHA = "unknown"
+
+    # Locate the top-level buildinfo shipped with this app folder.
+    try:
+        import sys as _s
+        app_dir = Path(_s.executable).resolve().parent if getattr(_s, "frozen", False) else Path(__file__).parent
+        bi = app_dir / "buildinfo.py"
+        txt = bi.read_text(encoding="utf-8", errors="replace")
+        import re
+        m = re.search(r'BUILD_SHA\s*=\s*["\']([0-9a-f]+)', txt)
+        if m:
+            report.append(f"relaunched_current_sha={m.group(1)[:7]}")
+    except Exception as exc:
+        report.append(f"relaunch_buildinfo_read_failed={exc}")
+    report.append(f"process_buildinfo_sha={CURRENT_SHA[:7]}")
+    report.append("SELFTEST_REL_LAUNCHED")
+    _write(rel_out, report)
+    return 0
+
+
 def main() -> int:
+    # After an in-place update the background batch relaunches us with
+    # MKG_RELAUNCHED=1 (inherited). The relaunch handler records the (new)
+    # build SHA and exits quietly so we don't re-enter the update self-test.
+    relaunched = bool(os.environ.get("MKG_RELAUNCHED"))
+    if relaunched:
+        if os.environ.get("MKG_SELFTEST_APPLY") \
+                or os.environ.get("MKG_SELFTEST_UPDATE") \
+                or os.environ.get("MKG_SELFTEST"):
+            return _selftest_relaunch()
+        return 0  # real GUI relaunch after update: just open the app as normal
     if os.environ.get("MKG_SELFTEST_APPLY"):
         return _selftest_apply()
     if os.environ.get("MKG_SELFTEST_UPDATE"):

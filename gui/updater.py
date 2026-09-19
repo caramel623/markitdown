@@ -29,8 +29,9 @@ import zipfile
 from pathlib import Path
 from typing import List, Optional
 
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import QThread, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
+    QApplication,
     QDialog,
     QHBoxLayout,
     QLabel,
@@ -317,7 +318,13 @@ def apply_update(res: UpdateResult, relaunch: bool = True) -> str:
         'del "%~f0" >nul 2>&1',  # delete this batch once done
     ]
     if relaunch:
-        lines.append(f'start "" "{app.name}\\markitdown-gui.exe"')
+        # Inherited by the relaunched process. In normal GUI use it simply
+        # re-opens the app; in selftest mode the relaunch handler runs and
+        # records the new build SHA.
+        lines.append(
+            'set "MKG_RELAUNCHED=1" && '
+            f'start "" "{app.name}\\markitdown-gui.exe"'
+        )
 
     bat = BASE_DIR / f".mkg_update_{int(_now())}.bat"
     bat.write_text("\r\n".join(lines) + "\r\n", encoding="utf-8")
@@ -361,6 +368,12 @@ def _run_gc() -> None:
     import gc
 
     gc.collect()
+
+
+def _schedule_quit(ms: int = 500) -> None:
+    """Close the whole app shortly so our own file handles are released for
+    the background batch before it starts moving the folder in place."""
+    QTimer.singleShot(ms, QApplication.instance().quit)
 
 
 # --------------------------------------------------------------------------- dialog
@@ -470,7 +483,9 @@ class UpdateDialog(QDialog):
             )
             if ans == QMessageBox.StandardButton.Yes:
                 msg = apply_update(res, relaunch=True)
-                self.lbl.setText(msg + "（本程式即將關閉）")
+                self.lbl.setText(msg + "（本程式即將關閉並重新啟動）")
+                self.setStatusTip(msg)
+                _schedule_quit(500)
                 self.accept()
         else:
             self.lbl.setText(res.update_message or "更新失敗")
