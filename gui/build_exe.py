@@ -119,6 +119,13 @@ def main() -> int:
 
     run(pyinstaller_args())
 
+    # Ship a top-level buildinfo.py so the auto-updater can read the build
+    # SHA straight from the app folder (inside the release zip).
+    import shutil
+
+    shutil.copyfile(HERE / "buildinfo.py", DIST / "buildinfo.py")
+    print("Copied buildinfo.py into", DIST)
+
     print("\nDone. Folder-based build here:")
     print(f"  {DIST}\\")
     print(f"  {DIST}\\markitdown-gui.exe")

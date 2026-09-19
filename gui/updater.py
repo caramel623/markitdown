@@ -261,6 +261,14 @@ def verify_update(extract_dir: Path, expected_sha: Optional[str]) -> tuple[bool,
         return False, "未找到 markitdown-gui.exe", None
     bi = extract_dir / "buildinfo.py"
     if not bi.exists():
+        candidates = [
+            c for c in extract_dir.rglob("buildinfo.py")
+            if ".venv" not in c.parts and "__pycache__" not in c.parts
+        ]
+        # Prefer the shallowest (closest to the app root) buildinfo.py.
+        if candidates:
+            bi = min(candidates, key=lambda c: len(c.relative_to(extract_dir).parts))
+    if bi is None:
         return False, "未找到 buildinfo.py", None
     text = bi.read_text(encoding="utf-8", errors="replace")
     m = re.search(r'BUILD_SHA\s*=\s*["\']([0-9a-f]+)["\']', text)
