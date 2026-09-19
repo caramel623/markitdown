@@ -155,7 +155,7 @@ print(result.markdown)
 
 ### Azure Content Understanding
 
-[Azure Content Understanding](https://learn.microsoft.com/azure/ai-services/content-understanding/) 提供更高质量的轉換、結構化欄位抽取（YAML front matter）、多模態支援（文件、圖片、音訊、影片），以及可配置的解析器（analyzers）。
+[Azure Content Understanding](https://learn.microsoft.com/azure/ai-services/content-understanding/) 提供更高品質的轉換、結構化欄位抽取（YAML front matter）、多模態支援（文件、圖片、音訊、影片），以及可配置的解析器（analyzers）。
 
 安裝：`pip install 'markitdown[az-content-understanding]'`
 
@@ -163,7 +163,7 @@ print(result.markdown)
 
 Content Understanding 適用於你需要內建或 Document Intelligence 轉換器無法提供之能力的情境：
 
-- **音訊與影片檔案**——CU 是影片的唯一選項，也是音訊較高质量的雲端選項。內建轉換器不支援影片，且只有基礎的音訊轉錄。
+- **音訊與影片檔案**——CU 是影片的唯一選項，也是音訊較高品質的雲端選項。內建轉換器不支援影片，且只有基礎的音訊轉錄。
 - **結構化欄位抽取**——[Prebuilt](https://learn.microsoft.com/azure/ai-services/content-understanding/concepts/prebuilt-analyzers) 或 [custom-built](https://learn.microsoft.com/azure/ai-services/content-understanding/how-to/customize-analyzer-content-understanding-studio?tabs=portal) 解析器可抽取領域特定的欄位（發票金額、收據日期、合約條款），並序列化為 YAML front matter。內建整合與 Doc Intel 整合都沒辦法暴露欄位。
 - **更高質量的文件抽取**——對掃描 PDF、複雜表格與多頁文件的雲端版面分析与 OCR。
 - **單一 API 對齊所有模態**——一個 `cu_endpoint` 即可透過自動解析器路由處理文件、圖片、音訊與影片。
@@ -315,7 +315,7 @@ MarkItDown 是一個把檔案轉換成 Markdown、供 LLM 與相關文字分析�
 
 #### 範圍內（In scope）
 
-- 改善現有轉換器的還原度（fidility）（新格式的加入會審慎處理——特別是當它們會引入新的依賴時。多數情況下，新格式能透過[第三方外掛](#不需修改本-repository-extension-markitdown)獲得更好的支援。）
+- 改善現有轉換器的還原度（fidelity）（新格式的加入會審慎處理——特別是當它們會引入新的依賴時。多數情況下，新格式能透過[第三方外掛](#不需修改本-repository-即可延伸-markitdown)獲得更好的支援。）
 - Bug 修正、效能改善與安全性修正
 - `markitdown` 命令列介面
 - `markitdown-mcp` 套件
@@ -323,7 +323,7 @@ MarkItDown 是一個把檔案轉換成 Markdown、供 LLM 與相關文字分析�
 
 #### 範圍外（Out of scope）
 
-我們無法接受額外的應用程式、服務或伺服器。これら includes：
+我們無法接受額外的應用程式、服務或伺服器。這包括：
 
 - Web 伺服器、REST 或 HTTP API，以及託管式的轉換服務
 - Web 前端與瀏覽器端的介面
@@ -384,7 +384,7 @@ markitdown --use-plugins path-to-file.pdf
 
 MarkItDown 會以目前程序的權限進行 I/O。就像 `open()` 或 `requests.get()` 一樣，它會存取該程序本身能存取的資源。
 
-**對輸入做消毒：** 不要直接把不受信的輸入傳給 MarkItDown。若輸入的任何部分可能由不受信的使用者或系統控制（例如在託管或伺服器端應用程式中），就必須在呼叫 MarkItDown 前驗證並加以限制。這對你的環境而言，可能包括限制檔案路徑、限制 URI scheme 與網路目的地，以及封鎖對私有、迴圈（loopback）、鏈路本地（link-local）或金鑰/金鑑（metadata-service）位址的存取。
+**對輸入做消毒：** 不要直接把不受信的輸入傳給 MarkItDown。若輸入的任何部分可能由不受信的使用者或系統控制（例如在託管或伺服器端應用程式中），就必須在呼叫 MarkItDown 前驗證並加以限制。這對你的環境而言，可能包括限制檔案路徑、限制 URI scheme 與網路目的地，以及封鎖對私有、迴圈（loopback）、鏈路本地（link-local）或 metadata 服務（metadata-service）位址的存取。
 
 **只呼叫你需要的轉換方法：** 優先選擇符合你使用情境的最精確轉換 API。MarkItDown 的 `convert()` 方法刻意是寬容的，可以處理本地檔案、遠端 URI 與 byte stream。如果你的應用程式只需要讀取本地檔案，請改用 `convert_local()`。如果你需要對 URI 擷取更多控制，請自行呼叫 `requests.get()`，並把 response 物件傳給 `convert_response()`。若要最大程度的控制，開一個到你想要轉換的輸入的 stream，並呼叫 `convert_stream()`。
 
