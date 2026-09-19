@@ -377,22 +377,45 @@ def _schedule_quit(ms: int = 500) -> None:
 
 
 # --------------------------------------------------------------------------- dialog
-class UpdateDialog(QDialog):
+class SettingsDialog(QDialog):
+    """Central settings page. Updates are fully manual: the user clicks
+    '檢查更新' to check GitHub, then '下載並更新…' to install. No automatic
+    check is performed on app startup."""
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("檢查更新")
-        self.resize(520, 320)
+        self.setWindowTitle("設定")
+        self.resize(560, 400)
+        self.setMinimumWidth(520)
         self.result: Optional[UpdateResult] = None
+        self._worker: Optional[UpdateWorker] = None
         self._dl_worker: Optional[DownloadWorker] = None
 
+        from PyQt6.QtGui import QFont
+
         v = QVBoxLayout(self)
-        self.lbl = QLabel()
+
+        # Section title
+        title = QLabel("程式更新")
+        tf = QFont()
+        tf.setBold(True)
+        tf.setPointSize(tf.pointSize() + 2)
+        title.setFont(tf)
+        v.addWidget(title)
+
+        self.current_lbl = QLabel(f"目前版本 {APP_VERSION}（build {_short(BUILD_SHA)}）")
+        self.current_lbl.setWordWrap(True)
+        v.addWidget(self.current_lbl)
+
+        self.hint_lbl = QLabel("更新為手動操作：點「檢查更新」連線 GitHub，若有新版再點「下載並更新」。")
+        self.hint_lbl.setWordWrap(True)
+        self.hint_lbl.setStyleSheet("color: gray;")
+        v.addWidget(self.hint_lbl)
+
+        self.lbl = QLabel("尚未檢查更新。")
         self.lbl.setWordWrap(True)
-        self.lbl.setText(
-            f"正在檢查 {OWNER}/{REPO} 分支 {BRANCH} 的更新…\n\n"
-            f"本機版本 {APP_VERSION}（build {_short(BUILD_SHA)}）"
-        )
         v.addWidget(self.lbl)
+
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
         self.progress.setValue(0)
@@ -400,22 +423,40 @@ class UpdateDialog(QDialog):
         v.addWidget(self.progress)
         v.addStretch(1)
 
-        btn_row = QHBoxLayout()
-        self.btn_auto = QPushButton("自動下載並更新…")
-        self.btn_auto.setEnabled(False)
+        # Primary actions
+        act_row = QHBoxLayout()
+        self.btn_check = QPushButton("檢查更新")
+        self.btn_download = QPushButton("下載並更新…")
+        self.btn_download.setEnabled(False)
+        act_row.addWidget(self.btn_check)
+        act_row.addWidget(self.btn_download)
+        act_row.addStretch(1)
+        v.addLayout(act_row)
+
+        # Secondary actions
+        sec_row = QHBoxLayout()
         self.btn_repo = QPushButton("開啟專案頁面")
         self.btn_release = QPushButton("檢視 Releases")
-        self.btn_release.setEnabled(False)
         self.btn_close = QPushButton("關閉")
-        for b in (self.btn_auto, self.btn_repo, self.btn_release, self.btn_close):
-            btn_row.addWidget(b, stretch=1)
-        v.addLayout(btn_row)
+        sec_row.addWidget(self.btn_repo)
+        sec_row.addWidget(self.btn_release)
+        sec_row.addStretch(1)
+        sec_row.addWidget(self.btn_close)
+        v.addLayout(sec_row)
 
-        self.btn_auto.clicked.connect(self._do_auto_update)
+        # Wiring
+        self.btn_check.clicked.connect(self._do_check)
+        self.btn_download.clicked.connect(self._do_download)
         self.btn_repo.clicked.connect(lambda: _open_url((self.result or UpdateResult()).repo_url))
         self.btn_release.clicked.connect(lambda: _open_url((self.result or UpdateResult()).releases_url))
         self.btn_close.clicked.connect(self.accept)
 
+    def _do_check(self) -> None:
+        if self._worker and self._worker.isRunning():
+            return
+        self.btn_check.setEnabled(False)
+        self.btn_download.setEnabled(False)
+        self.lbl.setText(f"正在檢查 {OWNER}/{REPO} 分支 {BRANCH} 的更新…")
         self._worker = UpdateWorker()
         self._worker.finished_result.connect(self._on_checked)
         self._worker.finished.connect(self._worker.deleteLater)
@@ -423,24 +464,23 @@ class UpdateDialog(QDialog):
 
     def _on_checked(self, res: UpdateResult) -> None:
         self.result = res
+        self.btn_check.setEnabled(True)
         if not res.ok:
             self.lbl.setText(f"檢查失敗：{res.error}")
             return
         lines = [res.summary(), ""]
         if res.latest_release_tag:
             lines.append(f"最新發布：{res.latest_release_tag}")
+        if res.can_auto and res.asset_size:
+            lines.append(f"可用更新包：{res.asset_name}（{_human(res.asset_size)}）")
         if res.tip_sha:
-            ahead = "（分支領先本機）" if (res.tip_sha and not self._same(res.tip_sha)) else ""
+            ahead = "（分支領先本機）" if not self._same(res.tip_sha) else ""
             lines.append(f"分支 {BRANCH} 最新提交：{_short(res.tip_sha)}{ahead}")
             if res.tip_date:
                 lines.append(f"  日期：{res.tip_date}")
-        if res.can_auto and res.asset_size:
-            lines.append(f"可用更新包：{res.asset_name}（{_human(res.asset_size)}）")
-        lines.append("")
-        lines.append(f"本機版本 {APP_VERSION}（build {_short(res.current_sha)}）")
         self.lbl.setText("\n".join(lines))
-        self.btn_auto.setEnabled(res.can_auto)
-        self.btn_release.setEnabled(bool(res.latest_release_url))
+        self.hint_lbl.setText("檢查完成。若有可用新版，請點「下載並更新」。")
+        self.btn_download.setEnabled(res.can_auto)
 
     @staticmethod
     def _same(sha: str) -> bool:
@@ -448,15 +488,16 @@ class UpdateDialog(QDialog):
         b = (sha or "").lower()
         return a.startswith(b) or b.startswith(a)
 
-    def _do_auto_update(self) -> None:
+    def _do_download(self) -> None:
         res = self.result
         if not res or not res.can_auto:
             return
         tmp = Path(tempfile.mkdtemp(prefix="mkg_dl_", dir=str(APP_DIR.parent)))
         res.download_path = tmp / (res.asset_name or "update.zip")
-        self.btn_auto.setEnabled(False)
+        self.btn_check.setEnabled(False)
+        self.btn_download.setEnabled(False)
         self.progress.setVisible(True)
-        self.progress.setRange(0, 100)
+        self.progress.setValue(0)
         self.lbl.setText("正在下載更新…")
         self._dl_worker = DownloadWorker(res)
         self._dl_worker.progress_bytes.connect(self._on_progress)
@@ -473,6 +514,7 @@ class UpdateDialog(QDialog):
 
     def _on_download_done(self, res: UpdateResult) -> None:
         self.progress.setVisible(False)
+        self.btn_check.setEnabled(True)
         if res.update_ready:
             ans = QMessageBox.question(
                 self,
@@ -484,13 +526,19 @@ class UpdateDialog(QDialog):
             if ans == QMessageBox.StandardButton.Yes:
                 msg = apply_update(res, relaunch=True)
                 self.lbl.setText(msg + "（本程式即將關閉並重新啟動）")
-                self.setStatusTip(msg)
+                self.hint_lbl.setText(msg)
                 _schedule_quit(500)
                 self.accept()
+            else:
+                self.btn_download.setEnabled(res.can_auto)
         else:
+            self.btn_download.setEnabled(True)
             self.lbl.setText(res.update_message or "更新失敗")
             QMessageBox.warning(self, "更新", res.update_message or "更新失敗")
-            self.btn_auto.setEnabled(res.can_auto)
+
+
+# Back-compat alias.
+UpdateDialog = SettingsDialog
 
 
 def _open_url(url: str) -> None:

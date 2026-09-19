@@ -166,3 +166,13 @@ cython_debug/
 src/.DS_Store
 .DS_Store
 .cursorrules
+
+# MarkItDown GUI build artifacts
+# (distribution zips + root-level source icon; gui/app.ico is tracked)
+markitdown-gui-Windows-x64-*.zip
+pc2ua-yhc06-001.ico
+.mkg_update_*.bat
+mkg_update_*/
+mkg_dl_*/
+markitdown-gui.new/
+C/temp/

@@ -44,12 +44,15 @@ markitdown-gui\
 5. 完成後可點 **開啟輸出資料夾**；雙擊表格列可直接開啟該檔的 `.md`。
    - 若多個檔案檔名相同（例如都有 `test.pdf`、`test.docx`），輸出會自動加 `-2`、`-3`… 避免互相覆蓋。
 
-### 檢查更新（自動更新）
-- 點工具列的 **檢查更新**，會連上 GitHub 比對**當前版本 vs 最新 release**：
-  - 若已是最新：顯示「已是最終版本」。
-  - 若有新版：按下 **自動下載並更新…** → 下載對應版本 → 驗證 SHA → 套用更新並重新啟動。
-- 預設 **啟動時背景檢查更新**（可勾選停用）；偵測到新版會彈出更新視窗，不會自動下載。
+### 檢查更新（手動，於「設定」頁）
+**更新不會自動進行**。全部在工具列的 **設定** 對話框中手動操作：
+1. 點 **設定**（程式啟動時不會自動連線檢查）。
+2. 在「程式更新」區塊點 **檢查更新**，連線 GitHub 比對**當前版本 vs 最新 release**：
+   - 若已是最新：顯示「已是最終版本」，不啟用下載按鈕。
+   - 若有新版：顯示可用更新包，並啟用 **下載並更新…** 按鈕。
+3. 點 **下載並更新…** → 下載對應版本 → 驗證 SHA → 套用更新並重新啟動。
 - 更新是**就地替換整個資料夾**：下載→解壓→驗證→背景批次換版→重啟，不需安裝程式。
+- 另附「開啟專案頁面」「檢視 Releases」連結，可手動下載。
 
 > **更新機制對 fork 的意義**：更新器固定檢查**這個 fork 的 default branch（`feature/qt6-gui`）**
 > 最新 release，所以下載的更新永遠來自本 repo，**與上游 `main` 完全無關**。
@@ -75,13 +78,15 @@ run_gui.bat
 .venv\Scripts\python gui\run_gui.py
 ```
 
-### 3. 打包成「資料夾版」EXE
+### 3. 打包成「資料夾版」EXE（自動附帶 ZIP）
 ```powershell
 .venv\Scripts\python gui\build_exe.py
 ```
 - 以目前 git commit 的 SHA 寫入 `gui/buildinfo.py`（更新器靠它比對版本）。
-- 輸出到 `dist\markitdown-gui\`（`markitdown-gui.exe` + `_internal\`，約 230MB）。
-- 可用環境變數覆寫 build SHA／版本（建置與發布版本不同時有用）：
+- 輸出資料夾 `dist\markitdown-gui\`（`markitdown-gui.exe` + `_internal\`，約 230MB）。
+- **同時自動產出發布用 ZIP**：`markitdown-gui-Windows-x64-<sha7>.zip`（置於 repo 根目錄，內部為 `markitdown-gui\` 資料夾）。
+- 程式圖示取自 `gui\app.ico`（同時設為 `.exe` 檔案圖示與視窗／視窗列圖示）；換圖示只需覆蓋這檔再重新 build。
+- 可用環境變數覆寫 build SHA／版本；加 `--no-zip` 可只出資料夾不壓 ZIP：
   ```powershell
   $env:MKG_SHA="ca03e2e"; $env:MKG_VERSION="1.0.0"
   .venv\Scripts\python gui\build_exe.py
@@ -91,8 +96,8 @@ run_gui.bat
 ```powershell
 .venv\Scripts\python gui\publish_release.py
 ```
-- 把 `dist\markitdown-gui\` 壓成 `markitdown-gui-Windows-x64-<sha7>.zip`。
-- 透過 `gh` 上傳成 GitHub release（asset 檔名內嵌 build SHA）。
+- 直接上傳 `build_exe.py` 已產出的 ZIP（若缺則補打包）。
+- 透過 `gh` 建立／更新 GitHub release（asset 檔名內嵌 build SHA）。
 
 **發布新版 = 改程式 → `build_exe.py` → `publish_release.py`**，
 使用者手上的舊 EXE 之後就會**自動偵測並下載**這個 release。
