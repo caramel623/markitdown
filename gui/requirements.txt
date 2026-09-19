@@ -1,0 +1,4 @@
+PyQt6
+# markitdown is installed in editable mode from packages/markitdown
+# (see install.ps1 / install.sh). Equivalent PyPI form:
+# markitdown[docx,xlsx,xls,pptx,pdf,outlook]
