@@ -189,6 +189,55 @@ class MainWindow(QMainWindow):
 
         self._build_ui()
         self._apply_table_headers()
+        self._update_check_dialog = None
+        self._auto_check_done = False
+        self._bg_worker = None
+        from PyQt6.QtCore import QTimer
+
+        QTimer.singleShot(400, self._maybe_auto_check)
+
+    def _maybe_auto_check(self) -> None:
+        if self._auto_check_done:
+            return
+        self._auto_check_done = True
+        if self.chk_autoupdate.isChecked():
+            self._log("啟動時背景檢查更新…")
+            self._background_check()
+
+    def _background_check(self) -> None:
+        """Run the GitHub check without a dialog; notify only if an update exists."""
+        try:
+            from updater import UpdateWorker
+        except Exception as exc:  # pragma: no cover
+            self._log(f"無法載入更新模組：{exc}")
+            return
+        self._bg_worker = UpdateWorker()
+        self._bg_worker.finished_result.connect(self._on_bg_result)
+        self._bg_worker.finished.connect(self._bg_worker.deleteLater)
+        self._bg_worker.start()
+
+    def _on_bg_result(self, res) -> None:
+        if not res.ok:
+            self._log(f"背景檢查更新失敗：{res.error}")
+            return
+        if res.has_update:
+            self._log(f"偵測到更新（本機 {res.short_build} → 遠端 {res.short_tip}），開啟更新視窗…")
+            self.check_update()
+        else:
+            self._log(f"已是最終版本（build {res.short_build}）。")
+
+    def check_update(self) -> None:
+        """Open the full update-check dialog and show its result."""
+        try:
+            from updater import UpdateDialog
+        except Exception as exc:  # pragma: no cover
+            QMessageBox.warning(self, "更新", f"無法載入更新模組：{exc}")
+            return
+        if self._update_check_dialog is not None:
+            self._update_check_dialog.close()
+        self._update_check_dialog = UpdateDialog(self)
+        self._update_check_dialog.show()
+        self._log("已開啟檢查更新")
 
     # ------------------------------------------------------------------ UI
     def _build_ui(self) -> None:
@@ -205,10 +254,16 @@ class MainWindow(QMainWindow):
         self.btn_remove = QPushButton("移除選取")
         self.btn_clear = QPushButton("全清")
         self.btn_open_outdir = QPushButton("開啟輸出資料夾")
+        self.btn_check_update = QPushButton("檢查更新")
         for b in (self.btn_add_files, self.btn_add_folder, self.btn_remove,
-                  self.btn_clear, self.btn_open_outdir):
+                  self.btn_clear, self.btn_open_outdir, self.btn_check_update):
             b.setMinimumHeight(28)
             toolbar.addWidget(b)
+        toolbar.addStretch(1)
+        self.chk_autoupdate = QCheckBox("啟動時檢查更新")
+        self.chk_autoupdate.setChecked(True)
+        toolbar.addWidget(self.chk_autoupdate)
+        toolbar.addStretch(1)
         toolbar.addStretch(1)
         self.btn_convert = QPushButton("開始轉換")
         self.btn_convert.setMinimumHeight(32)
@@ -287,6 +342,7 @@ class MainWindow(QMainWindow):
         self.btn_choose_out.clicked.connect(self.choose_output)
         self.btn_convert.clicked.connect(self.start_convert)
         self.btn_stop.clicked.connect(self.stop_convert)
+        self.btn_check_update.clicked.connect(self.check_update)
         self.table.itemDoubleClicked.connect(self._on_row_double_click)
 
     def _mono_font(self):
