@@ -325,13 +325,21 @@ def apply_update(res: UpdateResult, relaunch: bool = True) -> str:
     # Launch detached so the swap proceeds after we shutdown.
     DETACHED = 0x00000008
     CREATE_NEW = 0x00000200
-    import ctypes
+    CREATE_NO_WINDOW = 0x08000000
+    import subprocess
 
-    si = _startupinfo()
-    ctypes.windll.CreateProcessW(  # type: ignore[attr-defined]
-        None, f'cmd.exe /c "{bat}"', None, None, False,
-        DETACHED | CREATE_NEW, None, str(app.parent), si
-    )
+    try:
+        subprocess.Popen(
+            ["cmd.exe", "/c", str(bat)],
+            creationflags=DETACHED | CREATE_NEW | CREATE_NO_WINDOW,
+            cwd=str(app.parent),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception as exc:
+        return f"排程更新時發生錯誤：{_short_error(exc)}"
+
     # Clean up our staging files we own.
     shutil.rmtree(new_dir, ignore_errors=True)
     if res.download_path:
@@ -347,38 +355,6 @@ def _now() -> float:
     import time
 
     return time.time()
-
-
-def _startupinfo():
-    import ctypes
-
-    class STARTUPINFOW(ctypes.Structure):
-        _fields_ = [
-            ("cb", ctypes.c_ulong),
-            ("lpReserved", ctypes.c_wchar_p),
-            ("lpDesktop", ctypes.c_wchar_p),
-            ("lpTitle", ctypes.c_wchar_p),
-            ("dwX", ctypes.c_ulong),
-            ("dwY", ctypes.c_ulong),
-            ("dwXSize", ctypes.c_ulong),
-            ("dwYSize", ctypes.c_ulong),
-            ("dwXCountChars", ctypes.c_ulong),
-            ("dwYCountChars", ctypes.c_ulong),
-            ("dwFillAttribute", ctypes.c_ulong),
-            ("dwFlags", ctypes.c_ulong),
-            ("wShowWindow", ctypes.c_ushort),
-            ("cbReserved2", ctypes.c_ushort),
-            ("lpReserved2", ctypes.c_void_p),
-            ("hStdInput", ctypes.c_void_p),
-            ("hStdOutput", ctypes.c_void_p),
-            ("hStdError", ctypes.c_void_p),
-        ]
-
-    si = STARTUPINFOW()
-    si.cb = ctypes.sizeof(STARTUPINFOW)
-    si.dwFlags = 1
-    si.wShowWindow = 0  # SW_HIDE
-    return ctypes.byref(si)
 
 
 def _run_gc() -> None:

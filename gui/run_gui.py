@@ -8,6 +8,7 @@ Supports an optional self-test for the frozen (PyInstaller) build:
 """
 import os
 import sys
+from pathlib import Path
 
 here = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, here)
@@ -177,7 +178,59 @@ def _write(path: Path, lines: list[str]) -> None:
     print("\n".join(lines))
 
 
+def _selftest_apply() -> int:
+    """Fetch + download + verify + schedule the in-place folder swap
+    (relaunch=False). Exits so the background batch performs the move."""
+    from PyQt6.QtWidgets import QApplication
+    from PyQt6.QtCore import QEventLoop, QTimer
+
+    from updater import UpdateWorker, DownloadWorker, verify_update, apply_update
+
+    report: list[str] = []
+    app = QApplication([])
+    out_path = Path(os.environ.get("MKG_SELFTEST_OUT", "C:\\temp\\mkg_apply.txt"))
+
+    loop = QEventLoop()
+    holder: list = []
+    w = UpdateWorker()
+    w.finished_result.connect(
+        lambda r: (holder.append(r), loop.quit())
+    )
+    QTimer.singleShot(30000, loop.quit)
+    w.start()
+    loop.exec()
+    res = holder[0] if holder else None
+    if not res or not res.can_auto:
+        _write(out_path, ["no downloadable update", "SELFTEST_APPLY_FAIL"])
+        return 1
+
+    import tempfile
+
+    dl = Path(os.environ.get("MKG_DOWNLOAD_DIR", tempfile.mkdtemp(prefix="mkg_dl_")))
+    dl.mkdir(parents=True, exist_ok=True)
+    res.download_path = dl / (res.asset_name or "update.zip")
+    dloop = QEventLoop()
+    dw = DownloadWorker(res)
+    dw.finished_result.connect(lambda r: dloop.quit())
+    QTimer.singleShot(300000, dloop.quit)
+    dw.start()
+    dloop.exec()
+
+    ok, msg, sha = verify_update(res.extract_dir, res.latest_sha)
+    report.append(f"verify ok={ok} msg={msg} sha={(sha or '')[:7]} latest={res.latest_sha[:7]}")
+    if res.update_ready and ok:
+        m = apply_update(res, relaunch=False)
+        report.append(f"apply_update -> {m}")
+        report.append("SELFTEST_APPLY_SCHEDULED")
+    else:
+        report.append("SELFTEST_APPLY_FAIL")
+    _write(out_path, report)
+    return 0
+
+
 def main() -> int:
+    if os.environ.get("MKG_SELFTEST_APPLY"):
+        return _selftest_apply()
     if os.environ.get("MKG_SELFTEST_UPDATE"):
         return _selftest_update()
     if os.environ.get("MKG_SELFTEST"):
