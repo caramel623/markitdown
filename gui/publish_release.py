@@ -42,6 +42,36 @@ def read_sha() -> str:
     return run(["git", "rev-parse", "HEAD"])
 
 
+def repo_slug() -> str | None:
+    """Target repo for `gh`, read from buildinfo.py (OWNER/REPO).
+
+    Returns e.g. 'caramel623/markitdown'. Passing it explicitly as --repo keeps
+    `gh` from auto-detecting a forked repo as its upstream (microsoft/markitdown).
+    """
+    bi = DIST_DIR / "buildinfo.py"
+    if bi.exists():
+        text = bi.read_text(encoding="utf-8")
+        o = re.search(r'OWNER\s*=\s*["\']([^"\']+)', text)
+        r = re.search(r'REPO\s*=\s*["\']([^"\']+)', text)
+        if o and r:
+            return f"{o.group(1)}/{r.group(1)}"
+    # Fallback: the fork's origin remote (strips scheme/https and trailing .git).
+    try:
+        origin = run(["git", "remote", "get-url", "origin"])
+        m = re.search(r"github\.com[:/]([^/\s]+/[^/\s]+?)(?:\.git)?/?$", origin)
+        if m:
+            return m.group(1)
+    except Exception:
+        pass
+    return None
+
+
+def gh_args() -> list[str]:
+    """Extra `gh` args: pin the target repo so releases never go to the upstream fork parent."""
+    slug = repo_slug()
+    return ["--repo", slug] if slug else []
+
+
 def get_zip(sha7: str) -> Path:
     """Reuse the distribution zip built by build_exe.py; make one if missing."""
     zip_path = ROOT / f"markitdown-gui-Windows-x64-{sha7}.zip"
@@ -74,15 +104,16 @@ def main() -> int:
         return 1
 
     if tag:
-        run(["gh", "release", "upload", tag, str(zip_path), "--clobber"])
+        run(["gh", *gh_args(), "release", "upload", tag, str(zip_path), "--clobber"])
     else:
         tag = "v" + sha[:7]
         run([
-            "gh", "release", "create", tag,
+            "gh", *gh_args(), "release", "create", tag,
             "--title", f"MarkItDown GUI {tag}",
             "--notes",
             f"Windows x64 folder-based build.\n\nSHA: {sha}\n\n"
-            "Unzip and run markitdown-gui.exe. The app auto-checks for newer builds.",
+            "Unzip and run markitdown-gui.exe. Updates are checked manually in the "
+            "Settings page.",
             str(zip_path),
         ])
 
