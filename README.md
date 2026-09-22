@@ -28,7 +28,7 @@ MarkItDown 目前支援從以下來源轉換：
 Markdown 非常接近純文字，標記與格式極少，但仍能表示重要的文件結構。主流 LLM（例如 OpenAI 的 GPT-4o）天生就「會說話」Markdown，且常常在未經提示的情況下就把 Markdown 納入其回應。這顯示它們經過大量 Markdown 格式文字的訓練、且對它理解良好。帶一個額外的好處是，Markdown 慣例在 token 上也非常高效。
 
 ## 先決條件
-MarkItDown 需要 Python 3.10 或更高版本。建議使用虛擬環境以避免依賴衝突。
+MarkItDown 需要 Python 3.10 至 3.14。建議使用虛擬環境以避免依賴衝突。
 
 使用標準的 Python 安裝，你可以用下列指令建立並啟動虛擬環境：
 
